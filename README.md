@@ -83,7 +83,7 @@ Human input remains ephemeral. Only derived emotional state is streamed to the v
 
 ```bash
 pip install fer vosk vaderSentiment sounddevice opencv-python websockets
-```bash
+```
 ---
 
 ## Status
