@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Reflekt Hybrid Organism</title>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+
+    <script src="bridge.js"></script>
+    <script src="sketch.js"></script>
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            height: 100%;
+            width: 100%;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none; /* Prevent text selection */
+        }
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* --- UI OVERLAY STYLES --- */
+        
+        /* 1. WELCOME FLASHCARD */
+        #welcome-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 1s ease;
+        }
+
+        #welcome-title {
+            font-size: 40px;
+            letter-spacing: 10px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            animation: glitch 3s infinite;
+        }
+
+        #welcome-subtitle {
+            font-size: 14px;
+            color: #888;
+            letter-spacing: 2px;
+            margin-bottom: 60px;
+        }
+
+        #start-prompt {
+            font-size: 14px;
+            color: #fff;
+            padding: 12px 24px;
+            border: 1px solid #444;
+            animation: pulse 2s infinite;
+            cursor: pointer;
+        }
+
+        /* 2. EXPANDABLE CONTROL PANEL */
+        #hud-container {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 50;
+            width: 300px;
+        }
+
+        /* The clickable header/toggle button */
+        #hud-toggle {
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #333;
+            color: #fff;
+            padding: 10px 15px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        #hud-toggle:hover {
+            background: rgba(30, 30, 30, 0.9);
+            border-color: #666;
+        }
+
+        /* The list of keys (Hidden/Shown) */
+        #hud-content {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #333;
+            border-top: none;
+            padding: 15px;
+            color: #ccc;
+            font-size: 16px; 
+            line-height: 1.8;
+            display: none; /* Hidden by default or toggled via script */
+            border-bottom-left-radius: 4px;
+            border-bottom-right-radius: 4px;
+        }
+
+        /* Specific Key Styling */
+        .key-badge {
+            color: #fff; /* CHANGED TO WHITE */
+            font-weight: bold;
+            display: inline-block;
+            width: 30px;
+        }
+
+        .desc {
+            color: #aaa;
+        }
+
+        /* ANIMATIONS */
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+        
+        @keyframes glitch {
+            0% { opacity: 1; }
+            95% { opacity: 1; }
+            96% { opacity: 0.8; transform: translateX(2px); }
+            97% { opacity: 1; transform: translateX(0); }
+            100% { opacity: 1; }
+        }
+
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="welcome-screen">
+        <div id="welcome-title">R E F L E K T</div>
+        <div id="welcome-subtitle">BIOMETRIC RESIDUE SYSTEM</div>
+        <div id="start-prompt">[ PRESS SPACE TO INITIALIZE ]</div>
+    </div>
+
+    <div id="hud-container">
+        <div id="hud-toggle">
+            <span>SYSTEM CONTROLS</span>
+            <span id="arrow-icon">▼</span> 
+        </div>
+        
+        <div id="hud-content">
+            <div><span class="key-badge">M</span> <span class="desc">Snapshot Memory</span></div>
+            <div><span class="key-badge">C</span> <span class="desc">Clear All</span></div>
+            <div><span class="key-badge">S</span> <span class="desc">Save Residue</span></div>
+            <div style="margin-top: 10px; border-top: 1px solid #444; padding-top: 10px;">
+                <span class="key-badge">E</span> <span class="desc" style="color: #fff;">End Session</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- WELCOME SCREEN LOGIC ---
+        const welcomeScreen = document.getElementById('welcome-screen');
+        
+        // Listen for Spacebar
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !welcomeScreen.classList.contains('hidden')) {
+                welcomeScreen.classList.add('hidden');
+                // Open the controls automatically when session starts so user sees them
+                toggleHUD(true); 
+            }
+        });
+
+        // Also allow clicking the welcome box to start
+        document.getElementById('start-prompt').addEventListener('click', () => {
+            welcomeScreen.classList.add('hidden');
+            toggleHUD(true);
+        });
+
+        // --- HUD TOGGLE LOGIC ---
+        const toggleBtn = document.getElementById('hud-toggle');
+        const hudContent = document.getElementById('hud-content');
+        const arrowIcon = document.getElementById('arrow-icon');
+        let isExpanded = false;
+
+        function toggleHUD(forceOpen = null) {
+            // If forceOpen is provided, set state directly
+            if (forceOpen !== null) isExpanded = forceOpen;
+            else isExpanded = !isExpanded;
+
+            if (isExpanded) {
+                hudContent.style.display = 'block';
+                arrowIcon.textContent = '▼'; // Arrow points up (Collapse)
+            } else {
+                hudContent.style.display = 'none';
+                arrowIcon.textContent = '▲'; // Arrow points down (Expand)
+            }
+        }
+
+        toggleBtn.addEventListener('click', () => toggleHUD());
+
+        console.log("UI System Loaded.");
+    </script>
+</body>
+</html>
