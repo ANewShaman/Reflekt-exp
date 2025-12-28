@@ -37,7 +37,13 @@
     </div>
 
     <script>
-        const IMAGE_FILENAME = 'residue.png'; 
+        // Array of your session captures
+        const IMAGE_FILES = [
+            'residue1.png', 'residue2.png', 'residue3.png', 
+            'residue4.png', 'residue5.png', 'residue6.png',
+            'residue7.png', 'residue8.png', 'residue9.png',
+            'residue10.png', 'residue11.png'
+        ];
         const MOUSE_SENSITIVITY = 0.0008; 
         const MOVE_SPEED = 8.0; 
         const CAMERA_HEIGHT = 5.5; 
@@ -155,9 +161,21 @@
         textPlane.position.set(0, 14, -19.4); 
         scene.add(textPlane);
 
-        // --- GHOST FRAMES ---
+        // --- CYCLING GALLERY SYSTEM ---
         const textureLoader = new THREE.TextureLoader();
         const frames = [];
+        
+        // Create a shuffled copy of images for cycling
+        let imageQueue = [...IMAGE_FILES];
+        // Shuffle the queue
+        for (let i = imageQueue.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [imageQueue[i], imageQueue[j]] = [imageQueue[j], imageQueue[i]];
+        }
+        let queueIndex = 0;
+        
+        // Track currently displayed images
+        const displayedImages = new Set();
 
         function getSafePosition(sideX, currentFrameId) {
             let attempts = 0;
@@ -173,7 +191,7 @@
                     if (other.uuid === currentFrameId) continue;
                     if (other.userData.baseX === sideX) {
                         const dist = Math.sqrt(Math.pow(pos.y - other.position.y, 2) + Math.pow(pos.z - other.position.z, 2));
-                        if (dist < 8) { 
+                        if (dist < 10) { 
                             isOverlapping = true;
                             break;
                         }
@@ -185,35 +203,63 @@
             return pos;
         }
 
+        function getNextImageFromQueue() {
+            // Get next image from queue
+            const img = imageQueue[queueIndex];
+            queueIndex++;
+            
+            // If we've gone through all images, reshuffle and start over
+            if (queueIndex >= imageQueue.length) {
+                queueIndex = 0;
+                // Reshuffle to keep variety
+                for (let i = imageQueue.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [imageQueue[i], imageQueue[j]] = [imageQueue[j], imageQueue[i]];
+                }
+            }
+            
+            return img;
+        }
+
         function spawnFrame(sideX, rotationY) {
             const group = new THREE.Group();
             group.rotation.y = rotationY;
-            group.userData = { targetOpacity: 0, currentOpacity: 0, nextChangeTime: Math.random() * 5, baseX: sideX, fadeState: 'out' };
+            // Random spawn delay between 0-15 seconds for elegant staggered appearance
+            const spawnDelay = Math.random() * 15;
+            group.userData = { 
+                targetOpacity: 0, 
+                currentOpacity: 0, 
+                nextChangeTime: spawnDelay, 
+                baseX: sideX, 
+                fadeState: 'out',
+                currentImage: null
+            };
             
-            const border = new THREE.Mesh(
-                new THREE.BoxGeometry(6.2, 4.2, 0.1), 
-                new THREE.MeshBasicMaterial({ color: 0x444444, wireframe: true })
-            );
+            // Create frame border (edges only, no diagonals)
+            const borderMat = new THREE.LineBasicMaterial({ color: 0x666666, linewidth: 2 });
+            const borderGeom = new THREE.BufferGeometry();
+            const w = 12, h = 8; // half-width and half-height
+            const borderVertices = new Float32Array([
+                // Top edge
+                -w, h, 0,  w, h, 0,
+                // Right edge
+                w, h, 0,  w, -h, 0,
+                // Bottom edge
+                w, -h, 0,  -w, -h, 0,
+                // Left edge
+                -w, -h, 0,  -w, h, 0
+            ]);
+            borderGeom.setAttribute('position', new THREE.BufferAttribute(borderVertices, 3));
+            const border = new THREE.LineSegments(borderGeom, borderMat);
             group.add(border);
 
             const placeholder = new THREE.Mesh(
-                new THREE.PlaneGeometry(6, 4),
+                new THREE.PlaneGeometry(24, 16),
                 new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0 })
             );
             placeholder.position.z = 0.01;
             group.add(placeholder);
             group.userData.placeholder = placeholder;
-
-            textureLoader.load(IMAGE_FILENAME, (tex) => {
-                const imgMat = new THREE.MeshBasicMaterial({ 
-                    map: tex, transparent: true, opacity: 0, side: THREE.DoubleSide, 
-                    blending: THREE.AdditiveBlending, depthWrite: false 
-                });
-                const mesh = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), imgMat);
-                mesh.position.z = 0.03; 
-                group.add(mesh);
-                group.userData.mesh = mesh;
-            });
 
             const safe = getSafePosition(sideX, group.uuid);
             group.position.set(sideX, safe.y, safe.z);
@@ -222,7 +268,11 @@
             frames.push(group);
         }
 
-        for(let i=0; i<3; i++) { spawnFrame(-19.4, Math.PI/2); spawnFrame(19.4, -Math.PI/2); }
+        // Create 4 frames total (2 per wall)
+        for(let i=0; i<2; i++) { 
+            spawnFrame(-19.4, Math.PI/2); 
+            spawnFrame(19.4, -Math.PI/2); 
+        }
 
         const clock = new THREE.Clock();
         const moveDir = new THREE.Vector3();
@@ -244,19 +294,58 @@
                 const d = frame.userData;
                 if (time > d.nextChangeTime) {
                     if (d.fadeState === 'in') {
+                        // Start fading out
                         d.fadeState = 'out';
                         d.targetOpacity = 0.0;
-                        d.nextChangeTime = time + 2 + Math.random() * 3;
+                        // Longer visible duration (8-15 seconds)
+                        d.nextChangeTime = time + 8 + Math.random() * 7;
                     } else {
+                        // Fade in with NEXT image from queue at NEW position
+                        
+                        // Remove old image from displayed set
+                        if (d.currentImage) {
+                            displayedImages.delete(d.currentImage);
+                        }
+                        
+                        // Get next image from cycling queue
+                        const nextImage = getNextImageFromQueue();
+                        
+                        // Clean up old mesh if it exists
+                        if (d.mesh) {
+                            d.mesh.parent.remove(d.mesh);
+                            d.mesh.geometry.dispose();
+                            if (d.mesh.material.map) d.mesh.material.map.dispose();
+                            d.mesh.material.dispose();
+                        }
+                        
+                        // Load the next image
+                        textureLoader.load(nextImage, (tex) => {
+                            const imgMat = new THREE.MeshBasicMaterial({ 
+                                map: tex, transparent: true, opacity: 0, side: THREE.DoubleSide, 
+                                blending: THREE.AdditiveBlending, depthWrite: false 
+                            });
+                            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(24, 16), imgMat);
+                            mesh.position.z = 0.03; 
+                            frame.add(mesh);
+                            d.mesh = mesh;
+                        });
+                        
+                        // Start fading in with new image at NEW POSITION
                         d.fadeState = 'in';
                         d.targetOpacity = 0.5 + Math.random() * 0.4;
+                        d.currentImage = nextImage;
+                        displayedImages.add(nextImage);
+                        
+                        // Get new random position on the wall
                         const safe = getSafePosition(d.baseX, frame.uuid);
                         frame.position.set(d.baseX, safe.y, safe.z);
-                        d.nextChangeTime = time + 4 + Math.random() * 4;
+                        
+                        // Longer fade out duration (10-18 seconds)
+                        d.nextChangeTime = time + 10 + Math.random() * 8;
                     }
                 }
-                // Smoothened transition from 0.03 to 0.015
-                d.currentOpacity += (d.targetOpacity - d.currentOpacity) * 0.015;
+                // Even slower fade transition
+                d.currentOpacity += (d.targetOpacity - d.currentOpacity) * 0.002;
                 if (d.mesh) d.mesh.material.opacity = d.currentOpacity;
                 if (d.placeholder) d.placeholder.material.opacity = d.currentOpacity * 0.2;
             });
