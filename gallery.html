@@ -50,7 +50,7 @@
 
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x000000); 
-        scene.fog = new THREE.Fog(0x000000, 5, 45);   
+        scene.fog = new THREE.Fog(0x000000, 10, 60); // Increased fog distance (was 5, 45)   
 
         const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -182,10 +182,17 @@
             let pos = { y: 0, z: 0 };
             let isOverlapping;
             
+            // Wall dimensions: height 25, width 60
+            // Wall is centered, so z range is approximately -30 to 30
+            // Wall height is 0 to 25, centered at 12.5
+            // Image dimensions: 21.6 wide x 14.4 tall
+            // Safe bounds: y from 7.2 to 17.8 (leaves room top/bottom)
+            //              z from -19 to 19 (leaves room on sides)
+            
             do {
                 isOverlapping = false;
-                pos.y = 4 + Math.random() * 8;
-                pos.z = (Math.random() - 0.5) * 32;
+                pos.y = 7.2 + Math.random() * (17.8 - 7.2); // Between 7.2 and 17.8
+                pos.z = -19 + Math.random() * 38; // Between -19 and 19
                 
                 for (let other of frames) {
                     if (other.uuid === currentFrameId) continue;
@@ -235,10 +242,10 @@
                 currentImage: null
             };
             
-            // Create frame border (edges only, no diagonals)
+            // Create frame border (edges only, no diagonals) - reduced by 10%
             const borderMat = new THREE.LineBasicMaterial({ color: 0x666666, linewidth: 2 });
             const borderGeom = new THREE.BufferGeometry();
-            const w = 12, h = 8; // half-width and half-height
+            const w = 10.8, h = 7.2; // half-width and half-height (10% smaller: 12*0.9, 8*0.9)
             const borderVertices = new Float32Array([
                 // Top edge
                 -w, h, 0,  w, h, 0,
@@ -254,7 +261,7 @@
             group.add(border);
 
             const placeholder = new THREE.Mesh(
-                new THREE.PlaneGeometry(24, 16),
+                new THREE.PlaneGeometry(21.6, 14.4), // reduced by 10% (24*0.9, 16*0.9)
                 new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0 })
             );
             placeholder.position.z = 0.01;
@@ -321,10 +328,13 @@
                         // Load the next image
                         textureLoader.load(nextImage, (tex) => {
                             const imgMat = new THREE.MeshBasicMaterial({ 
-                                map: tex, transparent: true, opacity: 0, side: THREE.DoubleSide, 
-                                blending: THREE.AdditiveBlending, depthWrite: false 
+                                map: tex, 
+                                transparent: true, 
+                                opacity: 0, 
+                                side: THREE.DoubleSide,
+                                fog: true // Ensure images respect fog
                             });
-                            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(24, 16), imgMat);
+                            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(21.6, 14.4), imgMat); // reduced by 10%
                             mesh.position.z = 0.03; 
                             frame.add(mesh);
                             d.mesh = mesh;
