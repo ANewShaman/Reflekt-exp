@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Reflekt Gallery | Archive</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Courier New', Courier, monospace; user-select: none; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.95); transition: opacity 0.5s; z-index: 100; }
+        #title-container { text-align: center; margin-bottom: 40px; }
+        #welcome-title { font-size: 40px; letter-spacing: 10px; font-weight: bold; color: #fff; text-transform: uppercase; animation: glitch 3s infinite; margin-bottom: 15px; text-shadow: 0 0 20px rgba(255, 255, 255, 0.8); }
+        #welcome-subtitle { font-size: 14px; color: #888; letter-spacing: 3px; }
+        #start-prompt { font-size: 14px; color: #fff; padding: 12px 24px; border: 1px solid #444; background: #000; animation: pulse 2s infinite; cursor: pointer; pointer-events: auto; }
+        #hud-container { position: absolute; bottom: 20px; left: 20px; z-index: 50; display: none; }
+        .hud-box { background: rgba(0, 0, 0, 0.6); border: 1px solid #333; padding: 15px; color: #ccc; font-size: 14px; }
+        .key { color: #fff; font-weight: bold; }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        @keyframes glitch { 0% { opacity: 1; } 95% { opacity: 1; } 96% { opacity: 0.8; transform: translateX(2px); } 97% { opacity: 1; transform: translateX(0); } 100% { opacity: 1; } }
+        .hidden { opacity: 0; pointer-events: none; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div id="title-container">
+            <div id="welcome-title">REFLEKT GALLERY</div>
+            <div id="welcome-subtitle">IMMERSIVE ARCHIVE SPACE</div>
+        </div>
+        <div id="start-prompt">[ CLICK TO ENTER ]</div>
+    </div>
+
+    <div id="hud-container">
+        <div class="hud-box">
+            <div><span class="key">W A S D</span> TO WALK</div>
+            <div style="margin-top:5px;"><span class="key">MOUSE</span> TO LOOK</div>
+        </div>
+    </div>
+
+    <script>
+        const IMAGE_FILENAME = 'residue.png'; 
+        const MOUSE_SENSITIVITY = 0.0008; 
+        const MOVE_SPEED = 8.0; 
+        const CAMERA_HEIGHT = 5.5; 
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000000); 
+        scene.fog = new THREE.Fog(0x000000, 5, 45);   
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        document.body.appendChild(renderer.domElement);
+
+        const pitchObject = new THREE.Object3D();
+        pitchObject.add(camera);
+        const yawObject = new THREE.Object3D();
+        yawObject.position.y = CAMERA_HEIGHT;
+        yawObject.add(pitchObject);
+        scene.add(yawObject);
+
+        // --- IMPROVED LIGHTING (Increased by 10%) ---
+        scene.add(new THREE.AmbientLight(0xffffff, 0.11)); 
+        
+        const playerLight = new THREE.PointLight(0xffffff, 0.88, 16.5);
+        yawObject.add(playerLight);
+
+        const ceilLight1 = new THREE.PointLight(0x4444ff, 0.55, 44);
+        ceilLight1.position.set(10, 20, 0);
+        scene.add(ceilLight1);
+
+        const ceilLight2 = new THREE.PointLight(0xff4444, 0.33, 44);
+        ceilLight2.position.set(-10, 20, 0);
+        scene.add(ceilLight2);
+
+        // UI Logic
+        const uiLayer = document.getElementById('ui-layer');
+        const hudContainer = document.getElementById('hud-container');
+        const startPrompt = document.getElementById('start-prompt');
+        let isLocked = false;
+
+        startPrompt.addEventListener('click', () => document.body.requestPointerLock());
+        document.addEventListener('pointerlockchange', () => {
+            isLocked = (document.pointerLockElement === document.body);
+            uiLayer.classList.toggle('hidden', isLocked);
+            hudContainer.style.display = isLocked ? 'block' : 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isLocked) return;
+            yawObject.rotation.y -= e.movementX * MOUSE_SENSITIVITY;
+            pitchObject.rotation.x -= e.movementY * MOUSE_SENSITIVITY;
+            pitchObject.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitchObject.rotation.x));
+        });
+
+        const keys = { w: false, a: false, s: false, d: false };
+        const onKey = (val) => (e) => { 
+            const k = e.key.toLowerCase();
+            if (['w','s','a','d'].includes(k)) keys[k] = val;
+            if (e.code === 'ArrowUp') keys.w = val; if (e.code === 'ArrowDown') keys.s = val;
+        };
+        document.addEventListener('keydown', onKey(true));
+        document.addEventListener('keyup', onKey(false));
+
+        // WORLD
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(100, 100), 
+            new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1, metalness: 0.5 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.8 });
+        const wallGeo = new THREE.BoxGeometry(60, 25, 1);
+        
+        const walls = [
+            { pos: [0, 12.5, -20], rot: [0, 0, 0] },
+            { pos: [-20, 12.5, 0], rot: [0, Math.PI/2, 0] },
+            { pos: [20, 12.5, 0], rot: [0, -Math.PI/2, 0] }
+        ];
+        walls.forEach(w => {
+            const m = new THREE.Mesh(wallGeo, wallMat);
+            m.position.set(...w.pos);
+            m.rotation.set(...w.rot);
+            scene.add(m);
+        });
+
+        // --- STRIKING HEADER (Reduced by 10% from previous huge size) ---
+        const textCanvas = document.createElement('canvas');
+        const ctx = textCanvas.getContext('2d');
+        textCanvas.width = 2048;
+        textCanvas.height = 512;
+        ctx.fillStyle = "white";
+        ctx.font = "900 160px 'Courier New', monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.letterSpacing = "15px";
+        ctx.shadowColor = "rgba(255, 255, 255, 1)";
+        ctx.shadowBlur = 40;
+        ctx.fillText("REFLEKT GALLERY", textCanvas.width / 2, textCanvas.height / 2);
+        ctx.shadowBlur = 10;
+        ctx.fillText("REFLEKT GALLERY", textCanvas.width / 2, textCanvas.height / 2);
+
+        const textTex = new THREE.CanvasTexture(textCanvas);
+        textTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        const textMat = new THREE.MeshBasicMaterial({ 
+            map: textTex, 
+            transparent: true, 
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide
+        });
+        
+        // Width 45, Height 11.25 (10% smaller than previous 50x12.5)
+        const textPlane = new THREE.Mesh(new THREE.PlaneGeometry(45, 11.25), textMat);
+        textPlane.position.set(0, 14, -19.4); 
+        scene.add(textPlane);
+
+        // --- GHOST FRAMES ---
+        const textureLoader = new THREE.TextureLoader();
+        const frames = [];
+
+        function getSafePosition(sideX, currentFrameId) {
+            let attempts = 0;
+            let pos = { y: 0, z: 0 };
+            let isOverlapping;
+            
+            do {
+                isOverlapping = false;
+                pos.y = 4 + Math.random() * 8;
+                pos.z = (Math.random() - 0.5) * 32;
+                
+                for (let other of frames) {
+                    if (other.uuid === currentFrameId) continue;
+                    if (other.userData.baseX === sideX) {
+                        const dist = Math.sqrt(Math.pow(pos.y - other.position.y, 2) + Math.pow(pos.z - other.position.z, 2));
+                        if (dist < 8) { 
+                            isOverlapping = true;
+                            break;
+                        }
+                    }
+                }
+                attempts++;
+            } while (isOverlapping && attempts < 20);
+            
+            return pos;
+        }
+
+        function spawnFrame(sideX, rotationY) {
+            const group = new THREE.Group();
+            group.rotation.y = rotationY;
+            group.userData = { targetOpacity: 0, currentOpacity: 0, nextChangeTime: Math.random() * 5, baseX: sideX, fadeState: 'out' };
+            
+            const border = new THREE.Mesh(
+                new THREE.BoxGeometry(6.2, 4.2, 0.1), 
+                new THREE.MeshBasicMaterial({ color: 0x444444, wireframe: true })
+            );
+            group.add(border);
+
+            const placeholder = new THREE.Mesh(
+                new THREE.PlaneGeometry(6, 4),
+                new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0 })
+            );
+            placeholder.position.z = 0.01;
+            group.add(placeholder);
+            group.userData.placeholder = placeholder;
+
+            textureLoader.load(IMAGE_FILENAME, (tex) => {
+                const imgMat = new THREE.MeshBasicMaterial({ 
+                    map: tex, transparent: true, opacity: 0, side: THREE.DoubleSide, 
+                    blending: THREE.AdditiveBlending, depthWrite: false 
+                });
+                const mesh = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), imgMat);
+                mesh.position.z = 0.03; 
+                group.add(mesh);
+                group.userData.mesh = mesh;
+            });
+
+            const safe = getSafePosition(sideX, group.uuid);
+            group.position.set(sideX, safe.y, safe.z);
+
+            scene.add(group);
+            frames.push(group);
+        }
+
+        for(let i=0; i<3; i++) { spawnFrame(-19.4, Math.PI/2); spawnFrame(19.4, -Math.PI/2); }
+
+        const clock = new THREE.Clock();
+        const moveDir = new THREE.Vector3();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.1);
+            const time = clock.getElapsedTime();
+
+            moveDir.set(0,0,0);
+            if (keys.w) moveDir.z -= 1; if (keys.s) moveDir.z += 1;
+            if (keys.a) moveDir.x -= 1; if (keys.d) moveDir.x += 1;
+            if (moveDir.length() > 0) {
+                moveDir.normalize().multiplyScalar(MOVE_SPEED * delta);
+                yawObject.translateX(moveDir.x); yawObject.translateZ(moveDir.z);
+            }
+
+            frames.forEach(frame => {
+                const d = frame.userData;
+                if (time > d.nextChangeTime) {
+                    if (d.fadeState === 'in') {
+                        d.fadeState = 'out';
+                        d.targetOpacity = 0.0;
+                        d.nextChangeTime = time + 2 + Math.random() * 3;
+                    } else {
+                        d.fadeState = 'in';
+                        d.targetOpacity = 0.5 + Math.random() * 0.4;
+                        const safe = getSafePosition(d.baseX, frame.uuid);
+                        frame.position.set(d.baseX, safe.y, safe.z);
+                        d.nextChangeTime = time + 4 + Math.random() * 4;
+                    }
+                }
+                // Smoothened transition from 0.03 to 0.015
+                d.currentOpacity += (d.targetOpacity - d.currentOpacity) * 0.015;
+                if (d.mesh) d.mesh.material.opacity = d.currentOpacity;
+                if (d.placeholder) d.placeholder.material.opacity = d.currentOpacity * 0.2;
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
