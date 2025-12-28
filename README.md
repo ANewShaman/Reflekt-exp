@@ -101,7 +101,9 @@ python reflekt_main.py
 Open index.html in a modern browser (Chrome recommended). 
 To view the archive space, open gallery.html. 
 ---
-
+## To End
+Press ctrl + c
+---
 ## Status
 'What is art?' This question got me to create this... experiment?
 This project is an experimental system intended for:
